@@ -1,0 +1,2 @@
+# Local development only. The loopback sign-in uses seedy@sites.test.
+ADMIN_EMAILS="seedy@sites.test"
