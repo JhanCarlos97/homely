@@ -1,18 +1,849 @@
-'use client';
-import {useState,useEffect} from 'react';
-import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';
-import {RadioGroup,RadioGroupItem} from '@/components/ui/radio-group';
-import {Checkbox} from '@/components/ui/checkbox';
-import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
-import {projectPricing,DEFAULT_POLICY,Policy,guaranteeText} from '@/lib/policy';
-import {toast} from 'sonner';
-export function Choice({value,onChange,items,label}:{value:string;onChange:(v:string)=>void;items:{value:string;label:string}[];label:string}){return <Select value={value} onValueChange={v=>v&&onChange(v)}><SelectTrigger aria-label={label}><SelectValue/></SelectTrigger><SelectContent>{items.map(x=><SelectItem key={x.value} value={x.value}>{x.label}</SelectItem>)}</SelectContent></Select>}
-export function cash(n:number,market:string,es=false){return new Intl.NumberFormat(es?'es-CO':'en-US',{style:'currency',currency:market==='CO'?'COP':'USD',minimumFractionDigits:market==='CO'?0:2,maximumFractionDigits:market==='CO'?0:2}).format(n)+(market==='CO'?' COP':'');}
-export function MaterialChoice({value,onChange,es}:{value:string;onChange:(v:string)=>void;es:boolean}){return <div className="field">{es?'¿Quién suministra los materiales?':'Who supplies the materials?'}<RadioGroup value={value} onValueChange={onChange} className="optioncards"><label><RadioGroupItem value="client"/>{es?'El cliente · sin anticipo':'Customer · no advance'}</label><label><RadioGroupItem value="contractor"/>{es?'El contratista · anticipo para materiales':'Contractor · materials advance'}</label></RadioGroup></div>}
-export function PriceBreakdown({plan,market,es}:{plan:any;market:string;es:boolean}){return <div className="pricebreakdown">{[[es?'Valor del proyecto':'Project value',plan.amount],[es?'Saldo a favor de la visita':'Visit credit',-plan.credit],[`${es?'Tarifa del proyecto':'Project fee'} (${plan.projectRate}%)`,plan.fee],[es?'Total por pagar ahora':'Total due now',plan.due],[es?'Anticipo al contratista':'Contractor advance',plan.advance],[es?'Saldo retenido hasta entrega sin reclamos':'Balance held until completion without claims',plan.final]].map(([label,n],i)=><div className={'receipt '+(i===3?'total':'')} key={String(label)}><span>{label}</span><b>{cash(Number(n),market,es)}</b></div>)}<p className="fineprint">{es?'El contratista recibe el valor completo del proyecto: visita acreditada + anticipo + saldo. La tarifa la paga el cliente. Impuestos y primas de seguro no están incluidos.':'The contractor receives the full project value: credited visit + advance + balance. The customer pays the fee. Taxes and insurance premiums are not included.'}</p></div>}
-export function FeeGuide({market,es,policy=DEFAULT_POLICY}:{market:string;es:boolean;policy?:Policy}){const v=market==='CO'?100000:100,p=market==='CO'?1000000:1000,plan=projectPricing(p,v,'contractor',market,policy);return <div className="infocontent"><p>{es?`Reservar una visita cuesta su valor más ${policy.visitRate}%. Si realizas el proyecto con el mismo contratista, el valor base de esa visita será saldo a favor una sola vez. La tarifa de la visita no se devuelve ni se acredita.`:`A visit costs its price plus ${policy.visitRate}%. If you proceed with the same contractor, the visit's base price becomes a one-time project credit. The visit fee is not refunded or credited.`}</p><p>{es?`Los proyectos pagan únicamente ${policy.projectRate}% de tarifa sobre el valor total acordado, antes del saldo a favor. Aplica igual si contactas a un contratista o publicas un presupuesto. Publicar y proponer es gratis; el presupuesto es el valor para el contratista, sin la tarifa.`:`Projects incur only a ${policy.projectRate}% project fee on the full agreed value, before visit credit. The same rule applies to direct hire and budget-based posts. Posting and proposing are free; the budget is the contractor price, excluding the fee.`}</p><h3>{es?'Ejemplo con visita y materiales':'Example with a visit and materials'}</h3><div className="receipt"><span>{es?'Visita pagada + tarifa':'Visit paid + fee'}</span><b>{cash(v*(1+policy.visitRate/100),market,es)}</b></div><PriceBreakdown plan={plan} market={market} es={es}/><p>{es?`Si el contratista suministra materiales, se anticipa ${policy.advanceRate}% del valor del proyecto, hasta el saldo que quede tras acreditar la visita. El resto se libera sin reclamos al finalizar la revisión de ${policy.claimDays} días. El anticipo no es un cobro adicional.`:`If the contractor supplies materials, the advance is ${policy.advanceRate}% of the project value, capped at the balance after visit credit. The rest is released without open claims after the ${policy.claimDays}-day review period. The advance is not an extra charge.`}</p><p className="notice">{es?'Modo demo: no hay cobros, transferencias ni seguro activo. El plazo de revisión no elimina las garantías legales o contractuales.':'Demo mode: no charges, transfers or active insurance. The review period does not remove statutory or contractual warranty rights.'}</p></div>}
-export function Estimator({market,city,es,materials,onUse}:{market:string;city:string;es:boolean;materials:string;onUse:(value:number,lines:any[])=>void}){const [items,setItems]=useState<any[]>([]),[quantities,setQuantities]=useState<Record<string,number>>({}),[error,setError]=useState(''),[loading,setLoading]=useState(true);useEffect(()=>{let alive=true;setLoading(true);setError('');setItems([]);setQuantities({});fetch('/api/estimate?'+new URLSearchParams({market,city})).then(async r=>{const d:any=await r.json();if(!r.ok)throw Error(d.error);if(alive)setItems(d.items);}).catch(()=>alive&&setError(es?'No se pudo cargar. Intenta de nuevo con otra ubicación.':'Unable to load. Retry by selecting a location.')).finally(()=>alive&&setLoading(false));return()=>{alive=false}},[market,city,es]);const chosen=items.filter(i=>(quantities[i.id]||0)>0).map(i=>({...i,quantity:quantities[i.id]}));const labor=chosen.reduce((n,i)=>n+i.quantity*i.labor,0),mat=materials==='contractor'?chosen.reduce((n,i)=>n+i.quantity*i.materials,0):0;return <div className="estimator"><h3>{es?'Arma un presupuesto sugerido':'Build a suggested budget'}</h3><p>{es?'Indica las cantidades. Los valores se calculan por unidad y ciudad; la cotización final requiere revisión del profesional.':'Enter quantities. Values are calculated per unit and city; a professional must confirm the final quote.'}</p>{loading&&<p>{es?'Cargando costos…':'Loading costs…'}</p>}{error&&<p role="alert">{error}</p>}{items.map(i=><div className="estimateline" key={i.id}><label><b>{es?i.es:i.en}</b><small>{i.unit} · {i.count?`${es?'Promedio de':'Average of'} ${i.count} ${es?'observaciones':'observations'}`:es?'Referencia inicial; sin datos locales':'Initial reference; no local data'}</small><span>{es?'Mano de obra':'Labor'}: {cash(i.labor,market,es)} · {es?'Materiales':'Materials'}: {cash(i.materials,market,es)}</span><small>{es?i.material.split(' / ')[1]:i.material.split(' / ')[0]}</small></label><input aria-label={(es?i.es:i.en)+' '+i.unit} type="number" min="0" max="10000" step="0.1" value={quantities[i.id]||''} placeholder="0" onChange={e=>setQuantities({...quantities,[i.id]:Math.max(0,Math.min(10000,Number(e.target.value)))})}/></div>)}<div className="receipt"><span>{es?'Mano de obra':'Labor'}</span><b>{cash(labor,market,es)}</b></div><div className="receipt"><span>{es?'Materiales incluidos en contrato':'Materials included in contract'}</span><b>{cash(mat,market,es)}</b></div><button type="button" className="outline full" disabled={labor+mat<=0||loading} onClick={()=>onUse(labor+mat,chosen)}>{es?'Usar este presupuesto':'Use this budget'} · {cash(labor+mat,market,es)}</button><p className="fineprint">{es?'Las referencias iniciales son ilustrativas, no promedios de mercado verificados. Los promedios reales usan observaciones documentadas ingresadas por administración. No incluye tarifa de plataforma, impuestos, transporte o prima de seguro.':'Initial references are illustrative, not verified market averages. Real averages use documented observations entered by administration. Excludes platform fee, taxes, travel and insurance premium.'}</p></div>}
-export function ProjectCheckout({booking,proposal,project,records=[],market,es,policy,onDone}:{booking?:any;proposal?:any;project?:any;records?:any[];market:string;es:boolean;policy:Policy;onDone:()=>void}){const [amount,setAmount]=useState(proposal?.data.amount||''),[materials,setMaterials]=useState(project?.data.materials||'client'),[scope,setScope]=useState(proposal?.data.description||booking?.data.notes||''),[materialList,setMaterialList]=useState(''),[warranty,setWarranty]=useState(30),[deadline,setDeadline]=useState(''),[busy,setBusy]=useState(false),[creditId,setCreditId]=useState('none');const credits=records.filter(r=>r.kind==='booking'&&r.mine&&r.market===market&&r.data.status==='completed');const credit=booking?.data.price||(credits.find(r=>r.id===creditId)?.data.price||0);let plan:any=null;try{plan=projectPricing(Number(amount),credit,materials,market,policy)}catch{}async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);try{const r=await fetch('/api/contracts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:proposal?'accept_proposal':'create',data:{bookingId:booking?.id||(creditId==='none'?undefined:creditId),proposalId:proposal?.id,amount:Number(amount),materials,scope,materialList,warrantyDays:warranty,deadline}})});const d:any=await r.json();if(!r.ok)throw Error(d.error);toast.success(es?'Proyecto creado. Falta aceptación del contratista.':'Project created. Awaiting contractor acceptance.');onDone();}catch(e){toast.error((e as Error).message)}finally{setBusy(false)}}return <form className="modalform" onSubmit={submit}><div className="notice">{es?'Simulación: ambos deben acordar alcance, materiales, garantía y fecha antes del pago. El seguro no está activo.':'Simulation: both parties must agree on scope, materials, warranty and date before funding. Insurance is not active.'}</div><label className="field">{es?'Precio acordado con el contratista':'Agreed contractor price'}<input type="number" min={credit||1} max="1000000000" step={market==='CO'?'1':'0.01'} required value={amount} readOnly={!!proposal} onChange={e=>setAmount(e.target.value)}/></label>{!booking&&<label className="field">{es?'Aplicar visita previa (mismo contratista)':'Apply prior visit (same contractor)'}<Choice label="Visit credit" value={creditId} onChange={setCreditId} items={[{value:'none',label:es?'Sin visita':'No visit'},...credits.map(r=>({value:r.id,label:r.data.providerName+' · '+cash(r.data.price,market,es)}))]}/></label>}{!project?<MaterialChoice es={es} value={materials} onChange={setMaterials}/>:<p>{materials==='contractor'?(es?'Materiales a cargo del contratista':'Contractor supplies materials'):(es?'Materiales a cargo del cliente':'Customer supplies materials')}</p>}<label className="field">{es?'Alcance detallado':'Detailed scope'}<textarea required minLength={2} maxLength={4000} value={scope} onChange={e=>setScope(e.target.value)}/></label>{materials==='contractor'&&<label className="field">{es?'Materiales, cantidades y valores':'Materials, quantities and costs'}<textarea required minLength={5} maxLength={4000} value={materialList} onChange={e=>setMaterialList(e.target.value)}/></label>}<div className="formgrid"><label className="field">{es?'Entrega acordada':'Agreed delivery date'}<input type="date" required min={new Date().toISOString().slice(0,10)} value={deadline} onChange={e=>setDeadline(e.target.value)}/></label><label className="field">{es?'Garantía pactada (días)':'Agreed warranty (days)'}<input type="number" min="1" max="3650" required value={warranty} onChange={e=>setWarranty(Number(e.target.value))}/></label></div>{plan?<PriceBreakdown plan={plan} market={market} es={es}/>:<p className="notice">{es?'El precio debe ser igual o mayor al saldo a favor.':'The price must be at least the visit credit.'}</p>}<button className="primary full" disabled={busy||!plan}>{busy?(es?'Guardando…':'Saving…'):(es?'Confirmar proyecto demo':'Confirm demo project')}</button></form>}
-const states:any={awaiting_agreement:['Awaiting contractor','Esperando contratista'],awaiting_verification:['Review requirements','Revisar requisitos'],awaiting_funding:['Ready to fund','Listo para fondear'],in_progress:['In progress','En ejecución'],review:['Customer review','Revisión del cliente'],disputed:['Claim open · payout blocked','Reclamo abierto · pago bloqueado'],released:['Balance released · demo','Saldo liberado · demo'],refunded:['Held balance refunded · demo','Saldo retenido devuelto · demo']};
-export function ContractsPanel({es,admin=false,items,onRefresh}:{es:boolean;admin?:boolean;items?:any[];onRefresh?:()=>void}){const [contracts,setContracts]=useState<any[]>(items||[]),[err,setErr]=useState(''),[modal,setModal]=useState<any>(null),[form,setForm]=useState<any>({}),[busy,setBusy]=useState(false),[accepted,setAccepted]=useState(false);async function refresh(){try{const r=await fetch('/api/contracts');const d:any=await r.json();if(r.status===401)return;if(!r.ok)throw Error(d.error);setContracts(d.contracts);setErr('')}catch(e){setErr((e as Error).message)}}useEffect(()=>{if(items)setContracts(items)},[items]);useEffect(()=>{if(admin)return;const run=async()=>{await fetch('/api/contracts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reconcile'})});await refresh()};run();const timer=setInterval(run,60000);return()=>clearInterval(timer)},[admin]);function open(c:any,action:string){setModal({c,action});setForm({});setAccepted(false)}async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);try{const r=await fetch('/api/contracts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:modal.action,id:modal.c.id,data:{...form,accepted,rating:Number(form.rating||5),decision:form.decision||'remediate'}})});const d:any=await r.json();if(!r.ok)throw Error(d.error);setModal(null);toast.success(es?'Actualizado':'Updated');if(admin)onRefresh?.();else refresh();}catch(e){toast.error((e as Error).message)}finally{setBusy(false)}}return <section className="contracts-panel"><h2>{es?'Proyectos y control de pagos':'Projects & payment controls'}</h2><p className="fineprint">{es?'Todo es demo. Las liberaciones vencidas se procesan al abrir esta sección o cada minuto mientras está abierta; no hay transferencias bancarias ni tarea programada en segundo plano.':'All flows are demos. Due releases are processed when this section opens or each minute while open; there are no bank transfers or background scheduled jobs.'}</p>{err&&<p role="alert">{err}</p>}{!contracts.length&&<div className="notice">{es?'Crea un proyecto desde una visita completada o acepta una propuesta.':'Create a project from a completed visit or accept a proposal.'}</div>}{contracts.map(c=><article className="jobcard" key={c.id}><div className="jobmeta"><span className="pill">{(states[c.data.status]||[c.data.status,c.data.status])[es?1:0]}</span><span>{c.market} · DEMO</span></div><h3>{c.data.title}</h3><p>{c.data.providerName} · {es?'Entrega':'Delivery'}: {c.data.deadline}</p><p>{c.data.scope}</p><p>{es?'Garantía contractual':'Contractual warranty'}: {c.data.warrantyDays} {es?'días':'days'} · {es?'Ventana de reclamos':'Claim window'}: {c.data.claimDays} {es?'días':'days'}</p><PriceBreakdown plan={c.data.plan} market={c.market} es={es}/>{c.data.funded&&<p>{es?'Anticipo ya registrado':'Advance already recorded'}: {cash(c.data.advancePaid,c.market,es)}</p>}{c.data.reviewUntil&&<div className="notice">{es?'Revisión hasta':'Review until'} {new Date(c.data.reviewUntil).toLocaleString(es?'es-CO':'en-US')} · {es?'Sin reclamos se libera el saldo completo.':'Without claims the full remaining balance is released.'}</div>}{c.data.claim&&<div className="notice">{c.data.claim.reason}</div>}{c.data.feedback&&<p>★ {c.data.feedback.rating}/5 · {c.data.feedback.comment}</p>}<div className="actions">{(c.professional||(admin&&String(c.contractor).startsWith('sample:')))&&c.data.status==='awaiting_agreement'&&<button className="outline" onClick={()=>open(c,'agree')}>{es?'Aceptar requisitos':'Accept requirements'}</button>}{admin&&c.data.status==='awaiting_verification'&&<button className="outline" onClick={()=>open(c,'verify')}>{es?'Revisar requisitos':'Review requirements'}</button>}{c.customer&&c.data.status==='awaiting_funding'&&<button className="primary" onClick={()=>open(c,'fund')}>{es?'Simular pago y anticipo':'Simulate payment & advance'}</button>}{(c.professional||(admin&&String(c.contractor).startsWith('sample:')))&&c.data.status==='in_progress'&&<button className="outline" onClick={()=>open(c,'deliver')}>{es?'Entregar trabajo':'Submit completion'}</button>}{c.customer&&['in_progress','review'].includes(c.data.status)&&<button className="outline" onClick={()=>open(c,'claim')}>{es?'Reportar reclamo':'Report a claim'}</button>}{admin&&c.data.status==='disputed'&&<button className="outline" onClick={()=>open(c,'resolve')}>{es?'Resolver reclamo':'Resolve claim'}</button>}{c.customer&&c.data.status==='released'&&!c.data.feedback&&<button className="outline" onClick={()=>open(c,'feedback')}>{es?'Dejar reseña':'Leave feedback'}</button>}</div></article>)}<Dialog open={!!modal} onOpenChange={v=>!v&&setModal(null)}><DialogContent className="homelymodal"><DialogTitle>{es?'Actualizar proyecto demo':'Update demo project'}</DialogTitle><DialogDescription>{es?'No se mueven fondos reales. Cada cambio queda registrado.':'No real funds move. Each change is recorded.'}</DialogDescription>{modal&&<form className="modalform" onSubmit={submit}>{modal.action==='agree'&&<label className="checklabel consent"><Checkbox checked={accepted} onCheckedChange={v=>setAccepted(v===true)}/>{es?guaranteeText.es:guaranteeText.en}</label>}{modal.action==='fund'&&<><PriceBreakdown plan={modal.c.data.plan} market={modal.c.market} es={es}/><p className="notice">{es?'Se simula el fondeo completo y el anticipo de materiales indicado.':'Simulates full funding and the displayed materials advance.'}</p></>}{['verify','deliver'].includes(modal.action)&&<label className="field">{modal.action==='verify'?(es?'Resultado de revisión y referencias de documentos':'Review outcome and document references'):(es?'Acta de entrega y evidencia del trabajo':'Completion report and work evidence')}<textarea required minLength={2} maxLength={4000} value={form.evidence||''} onChange={e=>setForm({...form,evidence:e.target.value})}/></label>}{modal.action==='verify'&&<p className="notice">{es?'Revisar identidad, licencias aplicables, alcance, garantía pactada y referencias de póliza si corresponden. Esta verificación demo NO activa un seguro.':'Review identity, applicable licenses, scope, agreed warranty and policy references where relevant. Demo verification does NOT activate insurance.'}</p>}{modal.action==='deliver'&&modal.c.data.materials==='contractor'&&<label className="field">{es?'Referencias de facturas y materiales usados':'Receipt references and materials used'}<textarea required minLength={5} value={form.receipts||''} onChange={e=>setForm({...form,receipts:e.target.value})}/></label>}{modal.action==='claim'&&<label className="field">{es?'Describe el problema y evidencia':'Describe the issue and evidence'}<textarea required minLength={2} value={form.reason||''} onChange={e=>setForm({...form,reason:e.target.value})}/></label>}{modal.action==='resolve'&&<><Choice label="Resolution" value={form.decision||'remediate'} onChange={v=>setForm({...form,decision:v})} items={[{value:'remediate',label:es?'Solicitar corrección y nueva entrega':'Require remediation and new delivery'},{value:'refund',label:es?'Devolver solo saldo retenido':'Refund held balance only'}]}/><label className="field">{es?'Motivo documentado':'Documented reason'}<textarea required minLength={2} value={form.note||''} onChange={e=>setForm({...form,note:e.target.value})}/></label><p className="notice">{es?'Devolver el saldo retenido no recupera el anticipo ya liberado ni la visita. Esos valores requieren gestión separada.':'Refunding the held balance does not recover the advance or visit already released. Those amounts require separate handling.'}</p></>}{modal.action==='feedback'&&<><Choice label="Rating" value={String(form.rating||5)} onChange={v=>setForm({...form,rating:v})} items={[1,2,3,4,5].map(n=>({value:String(n),label:'★ '+n}))}/><label className="field">{es?'Tu reseña':'Your feedback'}<textarea required minLength={2} value={form.comment||''} onChange={e=>setForm({...form,comment:e.target.value})}/></label></>}<button className="primary full" disabled={busy||(modal.action==='agree'&&!accepted)}>{busy?(es?'Guardando…':'Saving…'):(es?'Confirmar en demo':'Confirm in demo')}</button></form>}</DialogContent></Dialog></section>}
-export function InsuranceResearch({es}:{es:boolean}){return <div className="infocontent"><h3>{es?'Opciones investigadas · sin convenio activo':'Researched options · no active partnership'}</h3><p>{es?'Colombia: SURA Cumplimiento a Favor de Particulares contempla incumplimiento, calidad del servicio y manejo del anticipo. La responsabilidad por daños a terceros requiere revisión de cobertura separada.':'Colombia: SURA private-party performance insurance addresses default, service quality and handling of advances. Third-party liability requires a separate coverage review.'}</p><a href="https://www.sura.co/seguros/empresas/cumplimiento/particulares" target="_blank" rel="noreferrer" className="textlink">SURA · {es?'Producto y exclusiones':'Product & exclusions'} ↗</a><p>{es?'EE. UU.: Travelers Performance Bonds puede respaldar incumplimiento contractual; ofrece un anexo opcional para pagos anticipados. Requiere evaluación e implica costos y requisitos que pueden no encajar en reparaciones pequeñas.':'US: Travelers Performance Bonds can support contractual default, with an optional advance-payment rider. Underwriting, cost and eligibility may make it unsuitable for small repairs.'}</p><a href="https://www.travelers.com/surety-bond/performance-bonds" target="_blank" rel="noreferrer" className="textlink">Travelers · Performance Bonds ↗</a><p>{es?'La responsabilidad civil cubre riesgos distintos al cumplimiento o la calidad del trabajo. No debe anunciarse como garantía automática contra trabajos defectuosos.':'Liability coverage addresses different risks from performance or workmanship quality. It must not be advertised as an automatic faulty-work guarantee.'}</p><a href="https://www.travelers.com/business-insurance/general-liability/owners-contractors-protective" target="_blank" rel="noreferrer" className="textlink">Travelers · {es?'Responsabilidad por obra y límites':'Project liability & limitations'} ↗</a><div className="notice">{es?'Consulta documental: 25 septiembre 2026. No hay póliza, precio, integración ni aceptación del riesgo confirmados. Antes de operar: cotizar con corredor autorizado, definir beneficiario, límites, deducibles, exclusiones, prima, comprobantes y proceso de reclamos por país. Retener dinero no constituye un seguro.':'Document review: September 25, 2026. No policy, price, integration or underwriting acceptance is confirmed. Before launch: consult a licensed broker to define insured parties, limits, deductibles, exclusions, premiums, evidence and country-specific claims. Holding funds is not insurance.'}</div><h3>{es?'Requisitos para el contratista':'Contractor requirements'}</h3><p>{es?guaranteeText.es:guaranteeText.en}</p><p>{es?'Los 7 días iniciales son una regla configurable de revisión de pagos, no una garantía legal ni un plazo que elimine derechos posteriores.':'The initial 7 days are a configurable payout review rule, not a statutory warranty or a deadline that removes later rights.'}</p></div>}
+"use client";
+import { useState, useEffect } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { projectPricing, DEFAULT_POLICY, Policy, guaranteeText } from "@/lib/policy";
+import { toast } from "sonner";
+export function Choice({
+  value,
+  onChange,
+  items,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  items: { value: string; label: string }[];
+  label: string;
+}) {
+  return (
+    <Select value={value} onValueChange={(v) => v && onChange(v)}>
+      <SelectTrigger aria-label={label}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((x) => (
+          <SelectItem key={x.value} value={x.value}>
+            {x.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+export function cash(n: number, market: string, es = false) {
+  return (
+    new Intl.NumberFormat(es ? "es-CO" : "en-US", {
+      style: "currency",
+      currency: market === "CO" ? "COP" : "USD",
+      minimumFractionDigits: market === "CO" ? 0 : 2,
+      maximumFractionDigits: market === "CO" ? 0 : 2,
+    }).format(n) + (market === "CO" ? " COP" : "")
+  );
+}
+export function MaterialChoice({
+  value,
+  onChange,
+  es,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  es: boolean;
+}) {
+  return (
+    <div className="field">
+      {es ? "¿Quién suministra los materiales?" : "Who supplies the materials?"}
+      <RadioGroup value={value} onValueChange={onChange} className="optioncards">
+        <label>
+          <RadioGroupItem value="client" />
+          {es ? "El cliente · sin anticipo" : "Customer · no advance"}
+        </label>
+        <label>
+          <RadioGroupItem value="contractor" />
+          {es ? "El contratista · anticipo para materiales" : "Contractor · materials advance"}
+        </label>
+      </RadioGroup>
+    </div>
+  );
+}
+export function PriceBreakdown({ plan, market, es }: { plan: any; market: string; es: boolean }) {
+  return (
+    <div className="pricebreakdown">
+      {[
+        [es ? "Valor del proyecto" : "Project value", plan.amount],
+        [es ? "Saldo a favor de la visita" : "Visit credit", -plan.credit],
+        [`${es ? "Tarifa del proyecto" : "Project fee"} (${plan.projectRate}%)`, plan.fee],
+        [es ? "Total por pagar ahora" : "Total due now", plan.due],
+        [es ? "Anticipo al contratista" : "Contractor advance", plan.advance],
+        [
+          es
+            ? "Saldo retenido hasta entrega sin reclamos"
+            : "Balance held until completion without claims",
+          plan.final,
+        ],
+      ].map(([label, n], i) => (
+        <div className={"receipt " + (i === 3 ? "total" : "")} key={String(label)}>
+          <span>{label}</span>
+          <b>{cash(Number(n), market, es)}</b>
+        </div>
+      ))}
+      <p className="fineprint">
+        {es
+          ? "El contratista recibe el valor completo del proyecto: visita acreditada + anticipo + saldo. La tarifa la paga el cliente. Impuestos y primas de seguro no están incluidos."
+          : "The contractor receives the full project value: credited visit + advance + balance. The customer pays the fee. Taxes and insurance premiums are not included."}
+      </p>
+    </div>
+  );
+}
+export function FeeGuide({
+  market,
+  es,
+  policy = DEFAULT_POLICY,
+}: {
+  market: string;
+  es: boolean;
+  policy?: Policy;
+}) {
+  const v = market === "CO" ? 100000 : 100,
+    p = market === "CO" ? 1000000 : 1000,
+    plan = projectPricing(p, v, "contractor", market, policy);
+  return (
+    <div className="infocontent">
+      <p>
+        {es
+          ? `Reservar una visita cuesta su valor más ${policy.visitRate}%. Si realizas el proyecto con el mismo contratista, el valor base de esa visita será saldo a favor una sola vez. La tarifa de la visita no se devuelve ni se acredita.`
+          : `A visit costs its price plus ${policy.visitRate}%. If you proceed with the same contractor, the visit's base price becomes a one-time project credit. The visit fee is not refunded or credited.`}
+      </p>
+      <p>
+        {es
+          ? `Los proyectos pagan únicamente ${policy.projectRate}% de tarifa sobre el valor total acordado, antes del saldo a favor. Aplica igual si contactas a un contratista o publicas un presupuesto. Publicar y proponer es gratis; el presupuesto es el valor para el contratista, sin la tarifa.`
+          : `Projects incur only a ${policy.projectRate}% project fee on the full agreed value, before visit credit. The same rule applies to direct hire and budget-based posts. Posting and proposing are free; the budget is the contractor price, excluding the fee.`}
+      </p>
+      <h3>{es ? "Ejemplo con visita y materiales" : "Example with a visit and materials"}</h3>
+      <div className="receipt">
+        <span>{es ? "Visita pagada + tarifa" : "Visit paid + fee"}</span>
+        <b>{cash(v * (1 + policy.visitRate / 100), market, es)}</b>
+      </div>
+      <PriceBreakdown plan={plan} market={market} es={es} />
+      <p>
+        {es
+          ? `Si el contratista suministra materiales, se anticipa ${policy.advanceRate}% del valor del proyecto, hasta el saldo que quede tras acreditar la visita. El resto se libera sin reclamos al finalizar la revisión de ${policy.claimDays} días. El anticipo no es un cobro adicional.`
+          : `If the contractor supplies materials, the advance is ${policy.advanceRate}% of the project value, capped at the balance after visit credit. The rest is released without open claims after the ${policy.claimDays}-day review period. The advance is not an extra charge.`}
+      </p>
+      <p className="notice">
+        {es
+          ? "Modo demo: no hay cobros, transferencias ni seguro activo. El plazo de revisión no elimina las garantías legales o contractuales."
+          : "Demo mode: no charges, transfers or active insurance. The review period does not remove statutory or contractual warranty rights."}
+      </p>
+    </div>
+  );
+}
+export function Estimator({
+  market,
+  city,
+  es,
+  materials,
+  onUse,
+}: {
+  market: string;
+  city: string;
+  es: boolean;
+  materials: string;
+  onUse: (value: number, lines: any[]) => void;
+}) {
+  const [items, setItems] = useState<any[]>([]),
+    [quantities, setQuantities] = useState<Record<string, number>>({}),
+    [error, setError] = useState(""),
+    [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError("");
+    setItems([]);
+    setQuantities({});
+    fetch("/api/estimate?" + new URLSearchParams({ market, city }))
+      .then(async (r) => {
+        const d: any = await r.json();
+        if (!r.ok) throw Error(d.error);
+        if (alive) setItems(d.items);
+      })
+      .catch(
+        () =>
+          alive &&
+          setError(
+            es
+              ? "No se pudo cargar. Intenta de nuevo con otra ubicación."
+              : "Unable to load. Retry by selecting a location.",
+          ),
+      )
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+  }, [market, city, es]);
+  const chosen = items
+    .filter((i) => (quantities[i.id] || 0) > 0)
+    .map((i) => ({ ...i, quantity: quantities[i.id] }));
+  const labor = chosen.reduce((n, i) => n + i.quantity * i.labor, 0),
+    mat = materials === "contractor" ? chosen.reduce((n, i) => n + i.quantity * i.materials, 0) : 0;
+  return (
+    <div className="estimator">
+      <h3>{es ? "Arma un presupuesto sugerido" : "Build a suggested budget"}</h3>
+      <p>
+        {es
+          ? "Indica las cantidades. Los valores se calculan por unidad y ciudad; la cotización final requiere revisión del profesional."
+          : "Enter quantities. Values are calculated per unit and city; a professional must confirm the final quote."}
+      </p>
+      {loading && <p>{es ? "Cargando costos…" : "Loading costs…"}</p>}
+      {error && <p role="alert">{error}</p>}
+      {items.map((i) => (
+        <div className="estimateline" key={i.id}>
+          <label>
+            <b>{es ? i.es : i.en}</b>
+            <small>
+              {i.unit} ·{" "}
+              {i.count
+                ? `${es ? "Promedio de" : "Average of"} ${i.count} ${es ? "observaciones" : "observations"}`
+                : es
+                  ? "Referencia inicial; sin datos locales"
+                  : "Initial reference; no local data"}
+            </small>
+            <span>
+              {es ? "Mano de obra" : "Labor"}: {cash(i.labor, market, es)} ·{" "}
+              {es ? "Materiales" : "Materials"}: {cash(i.materials, market, es)}
+            </span>
+            <small>{es ? i.material.split(" / ")[1] : i.material.split(" / ")[0]}</small>
+          </label>
+          <input
+            aria-label={(es ? i.es : i.en) + " " + i.unit}
+            type="number"
+            min="0"
+            max="10000"
+            step="0.1"
+            value={quantities[i.id] || ""}
+            placeholder="0"
+            onChange={(e) =>
+              setQuantities({
+                ...quantities,
+                [i.id]: Math.max(0, Math.min(10000, Number(e.target.value))),
+              })
+            }
+          />
+        </div>
+      ))}
+      <div className="receipt">
+        <span>{es ? "Mano de obra" : "Labor"}</span>
+        <b>{cash(labor, market, es)}</b>
+      </div>
+      <div className="receipt">
+        <span>{es ? "Materiales incluidos en contrato" : "Materials included in contract"}</span>
+        <b>{cash(mat, market, es)}</b>
+      </div>
+      <button
+        type="button"
+        className="outline full"
+        disabled={labor + mat <= 0 || loading}
+        onClick={() => onUse(labor + mat, chosen)}
+      >
+        {es ? "Usar este presupuesto" : "Use this budget"} · {cash(labor + mat, market, es)}
+      </button>
+      <p className="fineprint">
+        {es
+          ? "Las referencias iniciales son ilustrativas, no promedios de mercado verificados. Los promedios reales usan observaciones documentadas ingresadas por administración. No incluye tarifa de plataforma, impuestos, transporte o prima de seguro."
+          : "Initial references are illustrative, not verified market averages. Real averages use documented observations entered by administration. Excludes platform fee, taxes, travel and insurance premium."}
+      </p>
+    </div>
+  );
+}
+export function ProjectCheckout({
+  booking,
+  proposal,
+  project,
+  records = [],
+  market,
+  es,
+  policy,
+  onDone,
+}: {
+  booking?: any;
+  proposal?: any;
+  project?: any;
+  records?: any[];
+  market: string;
+  es: boolean;
+  policy: Policy;
+  onDone: () => void;
+}) {
+  const [amount, setAmount] = useState(proposal?.data.amount || ""),
+    [materials, setMaterials] = useState(project?.data.materials || "client"),
+    [scope, setScope] = useState(proposal?.data.description || booking?.data.notes || ""),
+    [materialList, setMaterialList] = useState(""),
+    [warranty, setWarranty] = useState(30),
+    [deadline, setDeadline] = useState(""),
+    [busy, setBusy] = useState(false),
+    [creditId, setCreditId] = useState("none");
+  const credits = records.filter(
+    (r) => r.kind === "booking" && r.mine && r.market === market && r.data.status === "completed",
+  );
+  const credit = booking?.data.price || credits.find((r) => r.id === creditId)?.data.price || 0;
+  let plan: any = null;
+  try {
+    plan = projectPricing(Number(amount), credit, materials, market, policy);
+  } catch {}
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await fetch("/api/contracts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: proposal ? "accept_proposal" : "create",
+          data: {
+            bookingId: booking?.id || (creditId === "none" ? undefined : creditId),
+            proposalId: proposal?.id,
+            amount: Number(amount),
+            materials,
+            scope,
+            materialList,
+            warrantyDays: warranty,
+            deadline,
+          },
+        }),
+      });
+      const d: any = await r.json();
+      if (!r.ok) throw Error(d.error);
+      toast.success(
+        es
+          ? "Proyecto creado. Falta aceptación del contratista."
+          : "Project created. Awaiting contractor acceptance.",
+      );
+      onDone();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form className="modalform" onSubmit={submit}>
+      <div className="notice">
+        {es
+          ? "Simulación: ambos deben acordar alcance, materiales, garantía y fecha antes del pago. El seguro no está activo."
+          : "Simulation: both parties must agree on scope, materials, warranty and date before funding. Insurance is not active."}
+      </div>
+      <label className="field">
+        {es ? "Precio acordado con el contratista" : "Agreed contractor price"}
+        <input
+          type="number"
+          min={credit || 1}
+          max="1000000000"
+          step={market === "CO" ? "1" : "0.01"}
+          required
+          value={amount}
+          readOnly={!!proposal}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+      </label>
+      {!booking && (
+        <label className="field">
+          {es ? "Aplicar visita previa (mismo contratista)" : "Apply prior visit (same contractor)"}
+          <Choice
+            label="Visit credit"
+            value={creditId}
+            onChange={setCreditId}
+            items={[
+              { value: "none", label: es ? "Sin visita" : "No visit" },
+              ...credits.map((r) => ({
+                value: r.id,
+                label: r.data.providerName + " · " + cash(r.data.price, market, es),
+              })),
+            ]}
+          />
+        </label>
+      )}
+      {!project ? (
+        <MaterialChoice es={es} value={materials} onChange={setMaterials} />
+      ) : (
+        <p>
+          {materials === "contractor"
+            ? es
+              ? "Materiales a cargo del contratista"
+              : "Contractor supplies materials"
+            : es
+              ? "Materiales a cargo del cliente"
+              : "Customer supplies materials"}
+        </p>
+      )}
+      <label className="field">
+        {es ? "Alcance detallado" : "Detailed scope"}
+        <textarea
+          required
+          minLength={2}
+          maxLength={4000}
+          value={scope}
+          onChange={(e) => setScope(e.target.value)}
+        />
+      </label>
+      {materials === "contractor" && (
+        <label className="field">
+          {es ? "Materiales, cantidades y valores" : "Materials, quantities and costs"}
+          <textarea
+            required
+            minLength={5}
+            maxLength={4000}
+            value={materialList}
+            onChange={(e) => setMaterialList(e.target.value)}
+          />
+        </label>
+      )}
+      <div className="formgrid">
+        <label className="field">
+          {es ? "Entrega acordada" : "Agreed delivery date"}
+          <input
+            type="date"
+            required
+            min={new Date().toISOString().slice(0, 10)}
+            value={deadline}
+            onChange={(e) => setDeadline(e.target.value)}
+          />
+        </label>
+        <label className="field">
+          {es ? "Garantía pactada (días)" : "Agreed warranty (days)"}
+          <input
+            type="number"
+            min="1"
+            max="3650"
+            required
+            value={warranty}
+            onChange={(e) => setWarranty(Number(e.target.value))}
+          />
+        </label>
+      </div>
+      {plan ? (
+        <PriceBreakdown plan={plan} market={market} es={es} />
+      ) : (
+        <p className="notice">
+          {es
+            ? "El precio debe ser igual o mayor al saldo a favor."
+            : "The price must be at least the visit credit."}
+        </p>
+      )}
+      <button className="primary full" disabled={busy || !plan}>
+        {busy
+          ? es
+            ? "Guardando…"
+            : "Saving…"
+          : es
+            ? "Confirmar proyecto demo"
+            : "Confirm demo project"}
+      </button>
+    </form>
+  );
+}
+const states: any = {
+  awaiting_agreement: ["Awaiting contractor", "Esperando contratista"],
+  awaiting_verification: ["Review requirements", "Revisar requisitos"],
+  awaiting_funding: ["Ready to fund", "Listo para fondear"],
+  in_progress: ["In progress", "En ejecución"],
+  review: ["Customer review", "Revisión del cliente"],
+  disputed: ["Claim open · payout blocked", "Reclamo abierto · pago bloqueado"],
+  released: ["Balance released · demo", "Saldo liberado · demo"],
+  refunded: ["Held balance refunded · demo", "Saldo retenido devuelto · demo"],
+};
+export function ContractsPanel({
+  es,
+  admin = false,
+  items,
+  onRefresh,
+}: {
+  es: boolean;
+  admin?: boolean;
+  items?: any[];
+  onRefresh?: () => void;
+}) {
+  const [contracts, setContracts] = useState<any[]>(items || []),
+    [err, setErr] = useState(""),
+    [modal, setModal] = useState<any>(null),
+    [form, setForm] = useState<any>({}),
+    [busy, setBusy] = useState(false),
+    [accepted, setAccepted] = useState(false);
+  async function refresh() {
+    try {
+      const r = await fetch("/api/contracts");
+      const d: any = await r.json();
+      if (r.status === 401) return;
+      if (!r.ok) throw Error(d.error);
+      setContracts(d.contracts);
+      setErr("");
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+  useEffect(() => {
+    if (items) setContracts(items);
+  }, [items]);
+  useEffect(() => {
+    if (admin) return;
+    const run = async () => {
+      await fetch("/api/contracts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reconcile" }),
+      });
+      await refresh();
+    };
+    run();
+    const timer = setInterval(run, 60000);
+    return () => clearInterval(timer);
+  }, [admin]);
+  function open(c: any, action: string) {
+    setModal({ c, action });
+    setForm({});
+    setAccepted(false);
+  }
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const r = await fetch("/api/contracts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: modal.action,
+          id: modal.c.id,
+          data: {
+            ...form,
+            accepted,
+            rating: Number(form.rating || 5),
+            decision: form.decision || "remediate",
+          },
+        }),
+      });
+      const d: any = await r.json();
+      if (!r.ok) throw Error(d.error);
+      setModal(null);
+      toast.success(es ? "Actualizado" : "Updated");
+      if (admin) onRefresh?.();
+      else refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="contracts-panel">
+      <h2>{es ? "Proyectos y control de pagos" : "Projects & payment controls"}</h2>
+      <p className="fineprint">
+        {es
+          ? "Todo es demo. Las liberaciones vencidas se procesan al abrir esta sección o cada minuto mientras está abierta; no hay transferencias bancarias ni tarea programada en segundo plano."
+          : "All flows are demos. Due releases are processed when this section opens or each minute while open; there are no bank transfers or background scheduled jobs."}
+      </p>
+      {err && <p role="alert">{err}</p>}
+      {!contracts.length && (
+        <div className="notice">
+          {es
+            ? "Crea un proyecto desde una visita completada o acepta una propuesta."
+            : "Create a project from a completed visit or accept a proposal."}
+        </div>
+      )}
+      {contracts.map((c) => (
+        <article className="jobcard" key={c.id}>
+          <div className="jobmeta">
+            <span className="pill">
+              {(states[c.data.status] || [c.data.status, c.data.status])[es ? 1 : 0]}
+            </span>
+            <span>{c.market} · DEMO</span>
+          </div>
+          <h3>{c.data.title}</h3>
+          <p>
+            {c.data.providerName} · {es ? "Entrega" : "Delivery"}: {c.data.deadline}
+          </p>
+          <p>{c.data.scope}</p>
+          <p>
+            {es ? "Garantía contractual" : "Contractual warranty"}: {c.data.warrantyDays}{" "}
+            {es ? "días" : "days"} · {es ? "Ventana de reclamos" : "Claim window"}:{" "}
+            {c.data.claimDays} {es ? "días" : "days"}
+          </p>
+          <PriceBreakdown plan={c.data.plan} market={c.market} es={es} />
+          {c.data.funded && (
+            <p>
+              {es ? "Anticipo ya registrado" : "Advance already recorded"}:{" "}
+              {cash(c.data.advancePaid, c.market, es)}
+            </p>
+          )}
+          {c.data.reviewUntil && (
+            <div className="notice">
+              {es ? "Revisión hasta" : "Review until"}{" "}
+              {new Date(c.data.reviewUntil).toLocaleString(es ? "es-CO" : "en-US")} ·{" "}
+              {es
+                ? "Sin reclamos se libera el saldo completo."
+                : "Without claims the full remaining balance is released."}
+            </div>
+          )}
+          {c.data.claim && <div className="notice">{c.data.claim.reason}</div>}
+          {c.data.feedback && (
+            <p>
+              ★ {c.data.feedback.rating}/5 · {c.data.feedback.comment}
+            </p>
+          )}
+          <div className="actions">
+            {(c.professional || (admin && String(c.contractor).startsWith("sample:"))) &&
+              c.data.status === "awaiting_agreement" && (
+                <button className="outline" onClick={() => open(c, "agree")}>
+                  {es ? "Aceptar requisitos" : "Accept requirements"}
+                </button>
+              )}
+            {admin && c.data.status === "awaiting_verification" && (
+              <button className="outline" onClick={() => open(c, "verify")}>
+                {es ? "Revisar requisitos" : "Review requirements"}
+              </button>
+            )}
+            {c.customer && c.data.status === "awaiting_funding" && (
+              <button className="primary" onClick={() => open(c, "fund")}>
+                {es ? "Simular pago y anticipo" : "Simulate payment & advance"}
+              </button>
+            )}
+            {(c.professional || (admin && String(c.contractor).startsWith("sample:"))) &&
+              c.data.status === "in_progress" && (
+                <button className="outline" onClick={() => open(c, "deliver")}>
+                  {es ? "Entregar trabajo" : "Submit completion"}
+                </button>
+              )}
+            {c.customer && ["in_progress", "review"].includes(c.data.status) && (
+              <button className="outline" onClick={() => open(c, "claim")}>
+                {es ? "Reportar reclamo" : "Report a claim"}
+              </button>
+            )}
+            {admin && c.data.status === "disputed" && (
+              <button className="outline" onClick={() => open(c, "resolve")}>
+                {es ? "Resolver reclamo" : "Resolve claim"}
+              </button>
+            )}
+            {c.customer && c.data.status === "released" && !c.data.feedback && (
+              <button className="outline" onClick={() => open(c, "feedback")}>
+                {es ? "Dejar reseña" : "Leave feedback"}
+              </button>
+            )}
+          </div>
+        </article>
+      ))}
+      <Dialog open={!!modal} onOpenChange={(v) => !v && setModal(null)}>
+        <DialogContent className="homelymodal">
+          <DialogTitle>{es ? "Actualizar proyecto demo" : "Update demo project"}</DialogTitle>
+          <DialogDescription>
+            {es
+              ? "No se mueven fondos reales. Cada cambio queda registrado."
+              : "No real funds move. Each change is recorded."}
+          </DialogDescription>
+          {modal && (
+            <form className="modalform" onSubmit={submit}>
+              {modal.action === "agree" && (
+                <label className="checklabel consent">
+                  <Checkbox checked={accepted} onCheckedChange={(v) => setAccepted(v === true)} />
+                  {es ? guaranteeText.es : guaranteeText.en}
+                </label>
+              )}
+              {modal.action === "fund" && (
+                <>
+                  <PriceBreakdown plan={modal.c.data.plan} market={modal.c.market} es={es} />
+                  <p className="notice">
+                    {es
+                      ? "Se simula el fondeo completo y el anticipo de materiales indicado."
+                      : "Simulates full funding and the displayed materials advance."}
+                  </p>
+                </>
+              )}
+              {["verify", "deliver"].includes(modal.action) && (
+                <label className="field">
+                  {modal.action === "verify"
+                    ? es
+                      ? "Resultado de revisión y referencias de documentos"
+                      : "Review outcome and document references"
+                    : es
+                      ? "Acta de entrega y evidencia del trabajo"
+                      : "Completion report and work evidence"}
+                  <textarea
+                    required
+                    minLength={2}
+                    maxLength={4000}
+                    value={form.evidence || ""}
+                    onChange={(e) => setForm({ ...form, evidence: e.target.value })}
+                  />
+                </label>
+              )}
+              {modal.action === "verify" && (
+                <p className="notice">
+                  {es
+                    ? "Revisar identidad, licencias aplicables, alcance, garantía pactada y referencias de póliza si corresponden. Esta verificación demo NO activa un seguro."
+                    : "Review identity, applicable licenses, scope, agreed warranty and policy references where relevant. Demo verification does NOT activate insurance."}
+                </p>
+              )}
+              {modal.action === "deliver" && modal.c.data.materials === "contractor" && (
+                <label className="field">
+                  {es
+                    ? "Referencias de facturas y materiales usados"
+                    : "Receipt references and materials used"}
+                  <textarea
+                    required
+                    minLength={5}
+                    value={form.receipts || ""}
+                    onChange={(e) => setForm({ ...form, receipts: e.target.value })}
+                  />
+                </label>
+              )}
+              {modal.action === "claim" && (
+                <label className="field">
+                  {es ? "Describe el problema y evidencia" : "Describe the issue and evidence"}
+                  <textarea
+                    required
+                    minLength={2}
+                    value={form.reason || ""}
+                    onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                  />
+                </label>
+              )}
+              {modal.action === "resolve" && (
+                <>
+                  <Choice
+                    label="Resolution"
+                    value={form.decision || "remediate"}
+                    onChange={(v) => setForm({ ...form, decision: v })}
+                    items={[
+                      {
+                        value: "remediate",
+                        label: es
+                          ? "Solicitar corrección y nueva entrega"
+                          : "Require remediation and new delivery",
+                      },
+                      {
+                        value: "refund",
+                        label: es ? "Devolver solo saldo retenido" : "Refund held balance only",
+                      },
+                    ]}
+                  />
+                  <label className="field">
+                    {es ? "Motivo documentado" : "Documented reason"}
+                    <textarea
+                      required
+                      minLength={2}
+                      value={form.note || ""}
+                      onChange={(e) => setForm({ ...form, note: e.target.value })}
+                    />
+                  </label>
+                  <p className="notice">
+                    {es
+                      ? "Devolver el saldo retenido no recupera el anticipo ya liberado ni la visita. Esos valores requieren gestión separada."
+                      : "Refunding the held balance does not recover the advance or visit already released. Those amounts require separate handling."}
+                  </p>
+                </>
+              )}
+              {modal.action === "feedback" && (
+                <>
+                  <Choice
+                    label="Rating"
+                    value={String(form.rating || 5)}
+                    onChange={(v) => setForm({ ...form, rating: v })}
+                    items={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: "★ " + n }))}
+                  />
+                  <label className="field">
+                    {es ? "Tu reseña" : "Your feedback"}
+                    <textarea
+                      required
+                      minLength={2}
+                      value={form.comment || ""}
+                      onChange={(e) => setForm({ ...form, comment: e.target.value })}
+                    />
+                  </label>
+                </>
+              )}
+              <button
+                className="primary full"
+                disabled={busy || (modal.action === "agree" && !accepted)}
+              >
+                {busy
+                  ? es
+                    ? "Guardando…"
+                    : "Saving…"
+                  : es
+                    ? "Confirmar en demo"
+                    : "Confirm in demo"}
+              </button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
+export function InsuranceResearch({ es }: { es: boolean }) {
+  return (
+    <div className="infocontent">
+      <h3>
+        {es
+          ? "Opciones investigadas · sin convenio activo"
+          : "Researched options · no active partnership"}
+      </h3>
+      <p>
+        {es
+          ? "Colombia: SURA Cumplimiento a Favor de Particulares contempla incumplimiento, calidad del servicio y manejo del anticipo. La responsabilidad por daños a terceros requiere revisión de cobertura separada."
+          : "Colombia: SURA private-party performance insurance addresses default, service quality and handling of advances. Third-party liability requires a separate coverage review."}
+      </p>
+      <a
+        href="https://www.sura.co/seguros/empresas/cumplimiento/particulares"
+        target="_blank"
+        rel="noreferrer"
+        className="textlink"
+      >
+        SURA · {es ? "Producto y exclusiones" : "Product & exclusions"} ↗
+      </a>
+      <p>
+        {es
+          ? "EE. UU.: Travelers Performance Bonds puede respaldar incumplimiento contractual; ofrece un anexo opcional para pagos anticipados. Requiere evaluación e implica costos y requisitos que pueden no encajar en reparaciones pequeñas."
+          : "US: Travelers Performance Bonds can support contractual default, with an optional advance-payment rider. Underwriting, cost and eligibility may make it unsuitable for small repairs."}
+      </p>
+      <a
+        href="https://www.travelers.com/surety-bond/performance-bonds"
+        target="_blank"
+        rel="noreferrer"
+        className="textlink"
+      >
+        Travelers · Performance Bonds ↗
+      </a>
+      <p>
+        {es
+          ? "La responsabilidad civil cubre riesgos distintos al cumplimiento o la calidad del trabajo. No debe anunciarse como garantía automática contra trabajos defectuosos."
+          : "Liability coverage addresses different risks from performance or workmanship quality. It must not be advertised as an automatic faulty-work guarantee."}
+      </p>
+      <a
+        href="https://www.travelers.com/business-insurance/general-liability/owners-contractors-protective"
+        target="_blank"
+        rel="noreferrer"
+        className="textlink"
+      >
+        Travelers · {es ? "Responsabilidad por obra y límites" : "Project liability & limitations"}{" "}
+        ↗
+      </a>
+      <div className="notice">
+        {es
+          ? "Consulta documental: 25 septiembre 2026. No hay póliza, precio, integración ni aceptación del riesgo confirmados. Antes de operar: cotizar con corredor autorizado, definir beneficiario, límites, deducibles, exclusiones, prima, comprobantes y proceso de reclamos por país. Retener dinero no constituye un seguro."
+          : "Document review: September 25, 2026. No policy, price, integration or underwriting acceptance is confirmed. Before launch: consult a licensed broker to define insured parties, limits, deductibles, exclusions, premiums, evidence and country-specific claims. Holding funds is not insurance."}
+      </div>
+      <h3>{es ? "Requisitos para el contratista" : "Contractor requirements"}</h3>
+      <p>{es ? guaranteeText.es : guaranteeText.en}</p>
+      <p>
+        {es
+          ? "Los 7 días iniciales son una regla configurable de revisión de pagos, no una garantía legal ni un plazo que elimine derechos posteriores."
+          : "The initial 7 days are a configurable payout review rule, not a statutory warranty or a deadline that removes later rights."}
+      </p>
+    </div>
+  );
+}

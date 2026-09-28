@@ -1,0 +1,19 @@
+node_modules/
+.next/
+.vinext/
+dist/
+out/
+coverage/
+.wrangler/
+.openai/
+.sites-runtime/
+.cache/
+.turbo/
+
+# Generated or vendored source should remain byte-for-byte unchanged.
+build/
+components/ui/
+drizzle/meta/
+hooks/use-mobile.ts
+vendor/
+pnpm-lock.yaml

@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Homely | Find your home’s helping hand",
-  description: "Book home repair specialists, post a project, and manage your work. Available in English and Spanish for the US and Colombia.",
+  description:
+    "Book home repair specialists, post a project, and manage your work. Available in English and Spanish for the US and Colombia.",
   other: {
     "codex-preview": "development",
   },

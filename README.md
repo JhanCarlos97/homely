@@ -45,17 +45,17 @@ The project fee and visit fee are calculated in both the direct booking and post
 
 ## Project structure
 
-| Path | Purpose |
-| --- | --- |
-| `app/page.tsx` | Marketplace interface |
-| `app/admin/` | Protected admin dashboard |
-| `app/api/` | Marketplace, admin, estimates, config, and contract endpoints |
-| `components/marketplace-controls.tsx` | Estimator, pricing, contract, and payment-state controls |
-| `lib/policy.ts` | Fee, credit, advance, estimator, and release rules |
-| `db/`, `drizzle/` | D1 schema and SQL migrations |
-| `public/` | Static assets |
+| Path                                           | Purpose                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------------ |
+| `app/page.tsx`                                 | Marketplace interface                                              |
+| `app/admin/`                                   | Protected admin dashboard                                          |
+| `app/api/`                                     | Marketplace, admin, estimates, config, and contract endpoints      |
+| `components/marketplace-controls.tsx`          | Estimator, pricing, contract, and payment-state controls           |
+| `lib/policy.ts`                                | Fee, credit, advance, estimator, and release rules                 |
+| `db/`, `drizzle/`                              | D1 schema and SQL migrations                                       |
+| `public/`                                      | Static assets                                                      |
 | `vite.config.ts`, `build/sites-vite-plugin.ts` | Vinext/Cloudflare local development and loopback-only mock sign-in |
-| `.openai/hosting.json` | Local-only Sites project association, ignored by Git |
+| `.openai/hosting.json`                         | Local-only Sites project association, ignored by Git               |
 
 ## Useful commands
 
